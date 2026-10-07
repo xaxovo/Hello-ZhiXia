@@ -14,15 +14,15 @@ Hello-ZhiXia（知夏生活，简称 **HZX**）是本仓库的项目代号。
 
 ```
 Hello-ZhiXia/
-├── README.md      # 项目说明
-├── .gitignore     # 版本控制忽略规则
-└── LICENSE        # 开源许可证（待确定）
+├── README.md       # 项目说明
+├── .gitignore      # 版本控制忽略规则
+└── .gitattributes  # 换行符与文本/二进制处理规则
 ```
 
 ## 快速开始
 
 ```bash
-git clone https://github.com/<your-account>/Hello-ZhiXia.git
+git clone https://github.com/xaxovo/Hello-ZhiXia.git
 cd Hello-ZhiXia
 ```
 

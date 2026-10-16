@@ -13,6 +13,7 @@ import {
   type PurgeRequest,
   type Tombstone,
 } from "./deletion.js";
+import type { Frontier } from "./frontier.js";
 import { ulid } from "./id.js";
 
 const NOW = 1_700_000_000_000;
@@ -30,30 +31,37 @@ function tombstone(deletedAtWall: number, pinned?: boolean): Tombstone {
   return pinned === true ? { ...base, pinned: true } : base;
 }
 
-/** 所有配对设备都已上报、且都越过 `wall` 的完整水位。 */
+/** 一个把 `sources` 全部推进到 `wall` 的前沿 —— 相当于「这些来源我都收全了」。 */
+function frontier(sources: readonly string[], wall: number): Frontier {
+  const result: Record<string, HlcTimestamp> = {};
+  for (const source of sources) result[source] = hlc(wall, source);
+  return result;
+}
+
+/** 每台设备都已上报、且各自都覆盖了全部来源的完整水位。 */
 function completeWatermark(devices: readonly string[], wall = NOW): PruneWatermark {
   // 返回类型必须显式写成元组：`.map()` 的返回值不会获得 `new Map()` 的
-  // 上下文元组推断，否则会推出 `(string | HlcTimestamp)[][]` 而无法赋值。
-  const entries = devices.map((id): [string, HlcTimestamp] => [id, hlc(wall, id)]);
+  // 上下文元组推断，否则会推出 `(string | Frontier)[][]` 而无法赋值。
+  const entries = devices.map((id): [string, Frontier] => [id, frontier(devices, wall)]);
   return pruneWatermark(new Map(entries));
 }
 
 /** 有一台设备从未上报 —— 水位不完整，裁剪必须被拒。 */
 function incompleteWatermark(wall = NOW): PruneWatermark {
   return pruneWatermark(
-    new Map<string, HlcTimestamp | undefined>([
-      ["A", hlc(wall, "A")],
+    new Map<string, Frontier | undefined>([
+      ["A", frontier(["A", "offline"], wall)],
       ["offline", undefined],
     ]),
   );
 }
 
 describe("pruneWatermark", () => {
-  it("取所有已上报设备中最小的 HLC", () => {
+  it("保留期墙钟取各设备**自身**进度的最小值", () => {
     const watermark = pruneWatermark(
-      new Map<string, HlcTimestamp | undefined>([
-        ["A", hlc(NOW, "A")],
-        ["B", hlc(NOW - 5_000, "B")],
+      new Map<string, Frontier | undefined>([
+        ["A", frontier(["A"], NOW)],
+        ["B", frontier(["B"], NOW - 5_000)],
       ]),
     );
 
@@ -63,10 +71,18 @@ describe("pruneWatermark", () => {
     expect(watermark.complete).toBe(true);
   });
 
+  it("设备前沿里没有它自己的条目时墙钟退化为 -Infinity（保守，不猜）", () => {
+    const watermark = pruneWatermark(
+      new Map<string, Frontier | undefined>([["A", frontier(["B"], NOW)]]),
+    );
+
+    expect(watermark.wall).toBe(Number.NEGATIVE_INFINITY);
+  });
+
   it("有设备从未上报时水位不完整", () => {
     const watermark = pruneWatermark(
-      new Map<string, HlcTimestamp | undefined>([
-        ["A", hlc(NOW, "A")],
+      new Map<string, Frontier | undefined>([
+        ["A", frontier(["A"], NOW)],
         ["B", undefined],
       ]),
     );
@@ -77,7 +93,7 @@ describe("pruneWatermark", () => {
   });
 
   it("一台都没上报时，再旧的墓碑也不能裁剪", () => {
-    const watermark = pruneWatermark(new Map<string, HlcTimestamp | undefined>([["A", undefined]]));
+    const watermark = pruneWatermark(new Map<string, Frontier | undefined>([["A", undefined]]));
 
     expect(watermark.complete).toBe(false);
     expect(watermark.reported).toBe(0);
@@ -86,6 +102,78 @@ describe("pruneWatermark", () => {
 
   it("空配对列表不算完整水位（没有任何设备可以确认）", () => {
     expect(pruneWatermark(new Map()).complete).toBe(false);
+  });
+});
+
+/**
+ * open-questions #15：水位必须是「同步前沿」，不能是「最新 HLC」。
+ *
+ * 下面这组用例全部针对「最新 HLC 判据会放行、前沿判据会拦住」的形态。
+ */
+describe("墓碑确认必须来自同步前沿（#15）", () => {
+  const DELETED_AT = NOW - TOMBSTONE_RETENTION_MS * 2;
+
+  it("某台设备从未收到墓碑时，即使所有设备的最新 HLC 都远超它，也不可裁剪", () => {
+    // A 删除笔记 N，产生墓碑 T（HLC = DELETED_AT）。
+    // 此后 A 与 B 再没有成功同步过，但各自都在本地持续写入到 NOW ——
+    // 于是两边的「最新 HLC」都远超 T，按旧判据 T 早已可裁剪。
+    const tomb = tombstone(DELETED_AT);
+    const watermark = pruneWatermark(
+      new Map<string, Frontier | undefined>([
+        ["A", { A: hlc(NOW, "A"), B: hlc(NOW, "B") }],
+        ["B", frontier(["B"], NOW)],
+      ]),
+    );
+
+    // 水位是完整的，保留期也早就过了 —— 旧判据会放行
+    expect(watermark.complete).toBe(true);
+    expect(watermark.reported).toBe(2);
+    expect(watermark.wall - DELETED_AT).toBeGreaterThanOrEqual(TOMBSTONE_RETENTION_MS);
+
+    // 但 B 的前沿里根本没有 A 的墓碑 → 裁掉它，B 重连后 N 就复活了
+    expect(isTombstonePrunable(tomb, watermark)).toBe(false);
+    // 并且必须如实报警，而不是显示成「已彻底消失」
+    expect(isTombstoneAtRisk(tomb, watermark)).toBe(true);
+  });
+
+  it("某台设备只差墓碑这一条也不算确认（连续前缀，差一条就是没收到）", () => {
+    const tomb = tombstone(DELETED_AT);
+    const watermark = pruneWatermark(
+      new Map<string, Frontier | undefined>([
+        ["A", { A: hlc(NOW, "A"), B: hlc(NOW, "B") }],
+        ["B", { A: hlc(DELETED_AT - 1, "A"), B: hlc(NOW, "B") }],
+      ]),
+    );
+
+    expect(watermark.complete).toBe(true);
+    expect(watermark.wall - DELETED_AT).toBeGreaterThanOrEqual(TOMBSTONE_RETENTION_MS);
+    expect(isTombstonePrunable(tomb, watermark)).toBe(false);
+  });
+
+  it("全部设备都覆盖墓碑、且保留期已过，才可裁剪", () => {
+    const tomb = tombstone(DELETED_AT);
+    const watermark = pruneWatermark(
+      new Map<string, Frontier | undefined>([
+        ["A", frontier(["A", "B"], NOW)],
+        ["B", frontier(["A", "B"], NOW)],
+      ]),
+    );
+
+    expect(isTombstonePrunable(tomb, watermark)).toBe(true);
+    expect(isTombstoneAtRisk(tomb, watermark)).toBe(false);
+  });
+
+  it("被裁剪的风险与确认互斥：确认不齐时只报警、不放行", () => {
+    const tomb = tombstone(DELETED_AT);
+    const watermark = pruneWatermark(
+      new Map<string, Frontier | undefined>([
+        ["A", { A: hlc(NOW, "A"), B: hlc(NOW, "B") }],
+        ["B", frontier(["B"], NOW)],
+      ]),
+    );
+
+    expect(isTombstonePrunable(tomb, watermark)).toBe(false);
+    expect(isTombstoneAtRisk(tomb, watermark)).toBe(true);
   });
 });
 
@@ -120,8 +208,8 @@ describe("墓碑保留期", () => {
     // 那台设备上的「刚删除」会被判定为可裁剪，而另一台真正离线很久的设备
     // 重连后会把数据复活。
     const watermark = pruneWatermark(
-      new Map<string, HlcTimestamp | undefined>([
-        ["fast", hlc(NOW + TOMBSTONE_RETENTION_MS + 1, "fast")],
+      new Map<string, Frontier | undefined>([
+        ["fast", frontier(["fast"], NOW + TOMBSTONE_RETENTION_MS + 1)],
         ["offline", undefined],
       ]),
     );

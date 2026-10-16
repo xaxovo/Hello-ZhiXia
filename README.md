@@ -13,7 +13,7 @@ Hello-ZhiXia（知夏生活，简称 **HZX**）是一个**跨平台、多设备�
 - **无中心** — 用户数据不经过服务方；见面点只能看到密文与连接元数据
 - **日常助手** — 日程、提醒、闹钟、笔记、文件、知识库、自动化
 
-架构设计与决策依据见 **[doc/](doc/README.md)** —— 包含 14 篇 ADR、数据层契约与未决问题清单。
+架构设计与决策依据见 **[doc/](doc/README.md)** —— 包含 15 篇 ADR、数据层契约与未决问题清单。
 源码注释里引用的 `ADR-00xx`、`data-model.md`、`open-questions #n` 都可以在那里找到。
 
 ## 目录结构
@@ -23,9 +23,9 @@ Hello-ZhiXia/
 ├── package.json           # pnpm workspace 根
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json     # 三端共享的 TS 配置
-├── doc/                   # 架构设计与决策记录（14 篇 ADR）
+├── doc/                   # 架构设计与决策记录（15 篇 ADR）
 ├── packages/
-│   ├── core-sync/         # 数据层契约：ULID / HLC / 操作日志 / 墓碑 / schema 版本化
+│   ├── core-sync/         # 数据层契约：ULID / HLC / 操作日志 / 同步前沿 / 快照压缩 / 冲突 / 墓碑 / schema 版本化
 │   ├── core-agent/        # pi 封装：工具注册、权限门、会话管理
 │   ├── core-mesh/         # 协调层：设备身份、发现、传输、写权租约
 │   ├── platform-adapters/ # 平台适配接口（文件 / 通知 / 闹钟 / 钥匙串）

@@ -25,6 +25,8 @@
  */
 
 export * from "./clock.js";
+export * from "./compaction.js";
+export * from "./conflict.js";
 export * from "./deletion.js";
 export * from "./frontier.js";
 export * from "./id.js";

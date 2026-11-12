@@ -114,7 +114,7 @@ final class LlmClient {
           )
           .timeout(_timeout);
     } on Object catch (error) {
-      throw LlmException('请求失败：$error');
+      throw LlmException(_describeNetworkError(error));
     }
 
     if (response.statusCode != 200) {
@@ -154,6 +154,27 @@ final class LlmClient {
   }
 
   void dispose() => _http.close();
+
+  /// 把网络异常翻译成用户能看懂、也知道下一步做什么的话。
+  ///
+  /// 直接把 `ClientException with SocketException ... errno = 7` 丢给用户，
+  /// 除了让人困惑没有别的用处。
+  static String _describeNetworkError(Object error) {
+    final text = '$error';
+    if (text.contains('Failed host lookup')) {
+      return '域名解析失败。请检查网络，以及「设置」里的接口地址是否正确。';
+    }
+    if (text.contains('timed out') || text.contains('TimeoutException')) {
+      return '请求超时。网络可能不稳定，稍后再试一次。';
+    }
+    if (text.contains('Connection refused') || text.contains('Connection closed')) {
+      return '连接被拒绝。请检查「设置」里的接口地址。';
+    }
+    if (text.contains('CERTIFICATE') || text.contains('Handshake')) {
+      return 'HTTPS 证书校验失败，请检查接口地址。';
+    }
+    return '网络请求失败：$text';
+  }
 
   static String _shorten(String value) =>
       value.length <= 200 ? value : '${value.substring(0, 200)}…';

@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 助手要访问云端模型接口。Flutter 模板只在 debug/profile 的清单里放了这条，
+         release 包因此会在真机上直接「域名解析失败」—— 这是个只有装真机才会发现的坑。 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- 提醒到点要响，需要能精确排程并显示通知 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>

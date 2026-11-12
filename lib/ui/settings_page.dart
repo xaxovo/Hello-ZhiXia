@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../app.dart';
 import '../domain/entry.dart';
+import '../platform/reminders.dart';
 import '../platform/settings.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -112,7 +113,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const _Hint(
             '密钥只保存在本机应用数据目录，不会上传到任何服务器。'
-            '但它没有加密，请不要在共享电脑上填写。',
+            '但它没有加密，请不要在共享设备上填写。',
           ),
           const Divider(height: 32),
           const _Section('数据'),
@@ -133,6 +134,13 @@ class _SettingsPageState extends State<SettingsPage> {
           const _Hint(
             '所有改动都以操作日志的形式保存在本机，日志会自动压缩成快照。'
             '数据目前只在这台设备上，跨设备同步尚未实现。',
+          ),
+          const Divider(height: 32),
+          const _Section('提醒'),
+          _ExactAlarmTile(scheduler: widget.controller.scheduler),
+          const _Hint(
+            'Android 通过系统闹钟投递提醒，关闭应用后仍会响；'
+            'Windows / Linux 使用进程内定时器，需要应用保持运行。',
           ),
           const Divider(height: 32),
           const _Section('说明'),
@@ -179,6 +187,86 @@ class _Section extends StatelessWidget {
               color: Theme.of(context).colorScheme.primary,
             ),
       ),
+    );
+  }
+}
+
+/// 精确闹钟的授权状态。
+///
+/// Android 14 起系统默认拒绝精确闹钟，此时提醒只能按窗口投递 ——
+/// 真机实测会晚两三分钟。与其瞒着用户，不如把状态摆出来并提供入口：
+/// **应用自己不去弹系统设置页**，只有用户点了这一行才跳转。
+class _ExactAlarmTile extends StatefulWidget {
+  const _ExactAlarmTile({required this.scheduler});
+
+  final ReminderScheduler scheduler;
+
+  @override
+  State<_ExactAlarmTile> createState() => _ExactAlarmTileState();
+}
+
+class _ExactAlarmTileState extends State<_ExactAlarmTile> with WidgetsBindingObserver {
+  bool? _permitted;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// 用户从系统设置页返回时重新检查。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final permitted = await widget.scheduler.exactAlarmsPermitted();
+    if (mounted) setState(() => _permitted = permitted);
+  }
+
+  Future<void> _request() async {
+    await widget.scheduler.requestExactAlarms();
+    await _refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final permitted = _permitted;
+
+    if (permitted == null) {
+      return const ListTile(
+        leading: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        title: Text('正在检查闹钟权限…'),
+      );
+    }
+
+    if (permitted) {
+      return ListTile(
+        leading: Icon(Icons.alarm_on, color: theme.colorScheme.primary),
+        title: const Text('精确闹钟：已允许'),
+        subtitle: const Text('提醒会在设定的时刻准时响'),
+      );
+    }
+
+    return ListTile(
+      onTap: _request,
+      leading: Icon(Icons.alarm, color: theme.colorScheme.error),
+      title: const Text('精确闹钟：未允许'),
+      subtitle: const Text('系统会把提醒推迟几分钟投递。点这里去开启。'),
+      trailing: const Icon(Icons.chevron_right),
     );
   }
 }

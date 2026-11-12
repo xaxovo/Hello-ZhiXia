@@ -11,7 +11,7 @@ Windows / Linux / Android 共用**一套 Flutter 代码**。
 | 能力 | 状态 |
 | --- | --- |
 | 笔记、待办、提醒的统一管理 | ✅ |
-| 到点提醒（Android 走系统闹钟，关闭应用后仍会响） | ✅ |
+| 到点提醒（Android 走系统闹钟，关闭应用后仍会响） | ✅ 需在设置里开启「精确闹钟」才是准点，否则系统会推迟几分钟 |
 | 与云端模型对话，由它帮你记录与查询 | ✅ |
 | 数据全部落在本地，可离线使用 | ✅ |
 | 跨设备同步 | ❌ 未实现 |
@@ -79,15 +79,23 @@ lib/
 
 ```bash
 flutter analyze     # 应为 No issues found
-flutter test        # 56 个用例
+flutter test        # 60 个用例
 ```
 
-重点覆盖的不是「界面能点」，而是四处**出错就不可恢复**的地方：
+重点覆盖的不是「界面能点」，而是五处**出错就不可恢复**的地方：
 
 1. HLC 的四分支 `observe` —— 少一个分支，重放顺序就会错
 2. 压缩的可重入性（`压缩两次 == 压缩一次`）—— 写错就是静默丢数据
 3. 日志末尾被截断时仍能读出其余数据 —— 断电不该让整份历史报废
 4. 助手闭环 —— 起一个假的 OpenAI 兼容服务端，验证「模型要求调工具 → 工具真的写进仓储 → 结果回传 → 模型给出答复」，不需要 API Key
+5. Android 清单里的运行期权限与通知 receiver —— 真机上踩过：release 包缺 `INTERNET` 时，助手直接「域名解析失败」，而 debug 包和桌面端都正常
+
+真机（Android 16）集成测试放在 `integration_test/`，用真实模型跑完整链路：
+
+```bash
+flutter test integration_test/device_test.dart -d <设备ID> \
+  --dart-define=HZX_API_KEY=sk-xxx
+```
 
 ## 架构文档
 

@@ -1,0 +1,24 @@
+name: hello_zhixia
+description: 知夏生活 —— 跨平台、本地优先的个人 agent 兼日常助手
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.14.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_local_notifications: 23.0.1
+  http: ^1.5.0
+  material_ui: ^1.11.0
+  path_provider: ^2.1.5
+  timezone: 0.11.2
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

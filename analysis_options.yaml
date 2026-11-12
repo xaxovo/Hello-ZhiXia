@@ -1,0 +1,22 @@
+# 静态检查配置。
+#
+# 在官方 flutter_lints 之上只加两条，都是为了让「数据层是纯逻辑」这件事
+# 由编译器守住，而不是靠自觉：
+# - strict-casts：不允许从 dynamic 隐式转换，避免 JSON 解析处的类型问题被吞掉
+# - strict-raw-types：不允许裸泛型
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+  exclude:
+    - build/**
+    - "**/*.g.dart"
+    - android/**
+    - windows/**
+    - linux/**
+
+linter:
+  rules:
+    prefer_single_quotes: true

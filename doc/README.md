@@ -13,6 +13,14 @@
 | [decisions/](./decisions/) | 架构决策记录（ADR），一篇一个决策 | 想改某个既有设计时，先读对应 ADR |
 | [open-questions.md](./open-questions.md) | 尚未决定的问题与已知风险 | 决定下一步做什么时 |
 
+> **实现状态**：客户端技术栈已改为 Flutter 单代码库，见
+> [ADR-0016](./decisions/0016-flutter-unified-client.md)。该篇同时说明了
+> 哪些既有 ADR 在 MVP 范围内暂停适用、哪些结论仍然有效。
+>
+> `overview.md` 与 `data-model.md` 描述的是**目标架构**，包含尚未实现的部分
+> （跨设备同步、知识库、权限门）。阅读时请对照 ADR-0016 的「暂不移植」清单，
+> 不要把目标架构当成当前实现。
+
 ## ADR 格式
 
 每篇 ADR 遵循同一结构：

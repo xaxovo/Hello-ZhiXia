@@ -4,43 +4,34 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
-# 只需要读代码；最小权限。
-permissions:
-  contents: read
-
-# 同一分支上新的推送取消旧的运行，避免排队堆积。
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FLUTTER_VERSION: '3.50.0'
+
 jobs:
-  verify:
-    name: typecheck + test
+  analyze-and-test:
+    name: 静态检查与测试
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
     steps:
-      - name: 检出代码
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      # 必须在 setup-node 之前：setup-node 的 pnpm 缓存依赖已安装的 pnpm。
-      # 版本由 package.json 的 packageManager 字段决定，不在这里重复写死。
-      - name: 安装 pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: 安装 Node
-        uses: actions/setup-node@v4
+      - uses: subosito/flutter-action@v2
         with:
-          node-version-file: .nvmrc
-          cache: pnpm
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
 
-      - name: 安装依赖
-        run: pnpm install --frozen-lockfile
+      - name: 解析依赖
+        run: flutter pub get
 
-      # tsc -b 会按 project references 构建全部包，因此这一步同时覆盖了
-      # 「能不能编译」与「类型是否正确」，不需要再单独跑一次 build。
-      - name: 类型检查
-        run: pnpm typecheck
+      - name: 静态检查
+        run: flutter analyze
 
       - name: 单元测试
-        run: pnpm test
+        run: flutter test --reporter expanded

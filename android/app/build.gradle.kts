@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "com.zhixia.hello_zhixia"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_local_notifications 与 androidx.core 1.19 都要求 compileSdk >= 37
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

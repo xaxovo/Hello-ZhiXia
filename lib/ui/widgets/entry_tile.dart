@@ -21,6 +21,7 @@ class EntryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final finished = entry.done;
 
     return ListTile(
       onTap: onTap,
@@ -29,7 +30,10 @@ class EntryTile extends StatelessWidget {
         entry.title.isEmpty ? '（无标题）' : entry.title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyLarge,
+        style: theme.textTheme.bodyLarge?.copyWith(
+          decoration: finished && entry.kind == EntryKind.task ? TextDecoration.lineThrough : null,
+          color: finished ? theme.colorScheme.onSurfaceVariant : null,
+        ),
       ),
       subtitle: _subtitle(theme),
       trailing: entry.kind == EntryKind.task
@@ -55,6 +59,7 @@ class EntryTile extends StatelessWidget {
     final parts = <String>[];
     final due = entry.dueAt;
     if (due != null) parts.add(formatDue(due));
+    if (entry.kind == EntryKind.reminder && entry.done) parts.add('已响过');
     if (entry.kind == EntryKind.note && entry.body.isNotEmpty) {
       parts.add(entry.body.replaceAll('\n', ' '));
     }
